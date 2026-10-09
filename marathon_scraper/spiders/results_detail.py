@@ -1,16 +1,16 @@
-"""Schritt 2: Detailseite für jeden Läufer aus Schritt 1.
+"""Step 2: the detail page for every runner from step 1.
 
-Aufruf:
-    uv run scrapy crawl results_detail                 # alle, die noch fehlen
-    uv run scrapy crawl results_detail -a limit=20     # zum Testen
+Usage:
+    uv run scrapy crawl results_detail                 # all that are still missing
+    uv run scrapy crawl results_detail -a limit=20     # for testing
 
-Der Spider liest die Läufer aus der Tabelle `runners` und fragt nur die an,
-für die es noch keine Zeile in `details` gibt. Bricht man ab (Ctrl-C) und
-startet neu, macht er also einfach dort weiter, wo er aufgehört hat.
+The spider reads the runners from the `runners` table and only requests those
+that have no row in `details` yet. If you stop it (Ctrl-C) and restart, it
+simply continues where it left off.
 
-Die Detailseite hat für jede Tabellenzeile eine CSS-Klasse mit dem internen
-Feldnamen, z.B. <td class="f-place_all">. Diese Klassen sind unabhängig von
-der Sprache -> sehr robuste Selektoren.
+The detail page has a CSS class with the internal field name on every table
+row, e.g. <td class="f-place_all">. These classes do not depend on the
+language -> very robust selectors.
 """
 
 import sqlite3
@@ -45,10 +45,10 @@ class ResultsDetailSpider(ProgressSpider):
             with sqlite3.connect(db_path) as conn:
                 idps = [row[0] for row in conn.execute(sql)]
         except sqlite3.OperationalError:
-            self.logger.error("Keine Tabelle 'runners' - zuerst `scrapy crawl results_list` ausführen.")
+            self.logger.error("No 'runners' table - run `scrapy crawl results_list` first.")
             return
 
-        self.logger.info("%d Detailseiten zu laden", len(idps))
+        self.logger.info("%d detail pages to load", len(idps))
         self.add_total(len(idps))
         for idp in idps:
             yield scrapy.Request(
@@ -60,11 +60,11 @@ class ResultsDetailSpider(ProgressSpider):
 
     def parse(self, response, idp: str):
         def f(field: str) -> str | None:
-            """Wert aus <td class="f-<field>"> in den Info-Tabellen."""
+            """Value from <td class="f-<field>"> in the info tables."""
             return clean(" ".join(response.css(f"td.f-{field} ::text").getall()))
 
-        # Halbmarathon-Zeilen in "Race Info": <tr class="f-time_21"> (HM 1) und
-        # <tr class="f-time_59"> (HM 2), jeweils mit Zeit und Platz.
+        # Half-marathon rows in "Race Info": <tr class="f-time_21"> (HM 1) and
+        # <tr class="f-time_59"> (HM 2), each with time and place.
         def hm(field: str) -> tuple[str | None, int | None]:
             tr = response.css(f"#detail-box-other tr.f-{field}")
             tds = tr.css("td")
@@ -92,9 +92,9 @@ class ResultsDetailSpider(ProgressSpider):
             hm2_place=hm2_place,
         )
 
-        # Splits-Tabelle: eine Zeile pro Messpunkt (5 km, 10 km, ..., Finish).
+        # Splits table: one row per timing point (5 km, 10 km, ..., Finish).
         for seq, tr in enumerate(response.css("#detail-box-splits tbody tr")):
-            # Klasse z.B. "list-highlight f-time_10" -> Schlüssel "time_10"
+            # Class e.g. "list-highlight f-time_10" -> key "time_10"
             classes = (tr.attrib.get("class") or "").split()
             key = next((c[2:] for c in classes if c.startswith("f-")), f"row_{seq}")
 

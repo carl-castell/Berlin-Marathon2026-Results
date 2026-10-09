@@ -1,7 +1,7 @@
-"""Scrapy-Einstellungen für das Marathon-Projekt.
+"""Scrapy settings for the marathon project.
 
-Alle Werte hier gelten für jeden Spider. Einzelne Werte lassen sich beim
-Aufruf überschreiben, z.B.:  scrapy crawl results_list -s HTTPCACHE_ENABLED=False
+All values apply to every spider. Individual values can be overridden on the
+command line, e.g.:  scrapy crawl results_list -s HTTPCACHE_ENABLED=False
 """
 
 from pathlib import Path
@@ -12,12 +12,12 @@ BOT_NAME = "marathon_scraper"
 SPIDER_MODULES = ["marathon_scraper.spiders"]
 NEWSPIDER_MODULE = "marathon_scraper.spiders"
 
-# Wohin die SQLite-Datenbank geschrieben wird (wird von der Pipeline gelesen).
+# Where the SQLite database is written (read by the pipeline).
 SQLITE_PATH = str(PROJECT_DIR / "data" / "marathon.db")
 
-# --- Wie sieht unser Request aus? ------------------------------------------
-# Der Server (AWS Load Balancer) antwortet auf Anfragen ohne "echten" Browser-
-# User-Agent mit 403 Forbidden. Darum geben wir uns als normaler Browser aus.
+# --- What our requests look like ---------------------------------------------
+# The server (AWS load balancer) answers requests without a "real" browser
+# user agent with 403 Forbidden. So we identify as a regular browser.
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/129.0 Safari/537.36"
@@ -27,72 +27,72 @@ DEFAULT_REQUEST_HEADERS = {
     "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
 }
 
-# robots.txt ist auf diesem Server selbst hinter dem 403-Filter und daher nicht
-# lesbar. Normalerweise sollte man ROBOTSTXT_OBEY = True lassen!
+# robots.txt is itself behind the 403 filter on this server and therefore
+# unreadable. Normally you should keep ROBOTSTXT_OBEY = True!
 ROBOTSTXT_OBEY = False
 
-# --- Höflich crawlen ---------------------------------------------------------
-# Wir wollen den Server nicht belasten: wenige parallele Requests, kleine Pause.
+# --- Crawl politely ------------------------------------------------------------
+# We don't want to put load on the server: few parallel requests, a small delay.
 CONCURRENT_REQUESTS_PER_DOMAIN = 4
 DOWNLOAD_DELAY = 0.25
-# AutoThrottle misst die Antwortzeiten und bremst automatisch, wenn der Server
-# langsamer wird. TARGET_CONCURRENCY = durchschnittlich gleichzeitige Requests.
+# AutoThrottle measures response times and slows down automatically when the
+# server gets slower. TARGET_CONCURRENCY = average number of parallel requests.
 AUTOTHROTTLE_ENABLED = True
 AUTOTHROTTLE_START_DELAY = 0.5
 AUTOTHROTTLE_MAX_DELAY = 10
 AUTOTHROTTLE_TARGET_CONCURRENCY = 3.0
 
-# --- Fehlerbehandlung ---------------------------------------------------------
-# Drei Ebenen, von "kurz gestört" bis "wir werden blockiert":
+# --- Error handling --------------------------------------------------------------
+# Three levels, from "briefly disrupted" to "we are being blocked":
 #
-# 1. Timeout: Antwortet der Server 30 s lang nicht, gilt der Request als
-#    gescheitert (Standard wären 180 s).
+# 1. Timeout: if the server doesn't answer within 30 s, the request counts as
+#    failed (the default would be 180 s).
 DOWNLOAD_TIMEOUT = 30
 #
-# 2. Retry (eingebaute RetryMiddleware): Timeouts, Verbindungsfehler und
-#    500/502/504 werden bis zu 3-mal sofort wiederholt. Klappt es dann immer
-#    noch nicht, ruft Scrapy den errback des Spiders auf -> Tabelle `failures`.
+# 2. Retry (built-in RetryMiddleware): timeouts, connection errors and
+#    500/502/504 are retried immediately up to 3 times. If it still fails,
+#    Scrapy calls the spider's errback -> `failures` table.
 RETRY_ENABLED = True
 RETRY_TIMES = 3
 #
-# 3. Backoff (unsere BackoffMiddleware, middlewares.py): Bei 429/503/403 bremst
-#    der Server uns aus. Dann pausiert der ganze Crawl mit wachsender Wartezeit
-#    (30 s, 60 s, 120 s, ... max. 10 min). Nach 6 Pausen in Folge ohne
-#    Erfolg dazwischen wird sauber beendet (Grund "blocked").
+# 3. Backoff (our BackoffMiddleware, middlewares.py): with 429/503/403 the
+#    server is throttling us. The whole crawl then pauses with increasing wait
+#    times (30 s, 60 s, 120 s, ... max. 10 min). After 6 pauses in a row with
+#    no success in between, it shuts down cleanly (reason "blocked").
 BACKOFF_HTTP_CODES = [429, 503, 403]
 BACKOFF_BASE_SECONDS = 30
 BACKOFF_MAX_SECONDS = 600
 BACKOFF_MAX_STRIKES = 6
 
 DOWNLOADER_MIDDLEWARES = {
-    # 560 > 550 (RetryMiddleware): sieht die Antwort zuerst.
+    # 560 > 550 (RetryMiddleware): sees the response first.
     "marathon_scraper.middlewares.BackoffMiddleware": 560,
 }
 
-# --- HTTP-Cache: der wichtigste Trick beim Entwickeln -----------------------
-# Jede Antwort wird unter .scrapy/httpcache gespeichert. Wenn du einen Selektor
-# änderst und den Spider neu startest, kommt die Seite aus dem Cache statt vom
-# Server -> schnell und schont den Server. Cache löschen: rm -rf .scrapy/httpcache
+# --- HTTP cache: the most useful trick while developing ------------------------
+# Every response is stored under .scrapy/httpcache. When you change a selector
+# and restart the spider, the page comes from the cache instead of the server
+# -> fast and easy on the server. Clear the cache: rm -rf .scrapy/httpcache
 HTTPCACHE_ENABLED = True
-HTTPCACHE_EXPIRATION_SECS = 0  # 0 = nie ablaufen
+HTTPCACHE_EXPIRATION_SECS = 0  # 0 = never expire
 HTTPCACHE_DIR = "httpcache"
-HTTPCACHE_IGNORE_HTTP_CODES = [403, 429, 500, 502, 503, 504]  # Fehler nicht cachen
+HTTPCACHE_IGNORE_HTTP_CODES = [403, 429, 500, 502, 503, 504]  # don't cache errors
 
-# --- Item-Pipelines ----------------------------------------------------------
-# Jedes Item, das ein Spider mit `yield` zurückgibt, läuft durch diese Pipelines
-# (kleinere Zahl = früher). Unsere einzige Pipeline schreibt in SQLite.
+# --- Item pipelines ----------------------------------------------------------------
+# Every item a spider yields passes through these pipelines (lower number =
+# earlier). Our only pipeline writes to SQLite.
 ITEM_PIPELINES = {
     "marathon_scraper.pipelines.SQLitePipeline": 300,
 }
 
-# --- Logging + Fortschrittsanzeige ---------------------------------------------
-# Das ausführliche Log geht in eine Datei. In der Konsole stehen nur der
-# Fortschrittsbalken plus Warnungen/Fehler (siehe extensions.py).
-# Alles wie gewohnt in der Konsole: -s LOG_FILE= -s PROGRESS_ENABLED=False
+# --- Logging + progress display ----------------------------------------------------
+# The detailed log goes to a file. The console only shows the progress bar
+# plus warnings/errors (see extensions.py).
+# Everything in the console as usual: -s LOG_FILE= -s PROGRESS_ENABLED=False
 LOG_LEVEL = "INFO"
 LOG_FILE = str(PROJECT_DIR / "logs" / "scrapy.log")
 (PROJECT_DIR / "logs").mkdir(exist_ok=True)
-LOGSTATS_INTERVAL = 60  # schreibt jede Minute "Crawled X pages ..." ins Log
+LOGSTATS_INTERVAL = 60  # writes "Crawled X pages ..." to the log every minute
 
 PROGRESS_ENABLED = True
 EXTENSIONS = {

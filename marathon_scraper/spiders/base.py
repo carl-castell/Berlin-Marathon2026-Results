@@ -1,12 +1,12 @@
-"""Gemeinsame Basisklasse für unsere Spider: Fortschritt zählen + Fehler behandeln.
+"""Shared base class for our spiders: count progress + handle errors.
 
-Fortschritt wird über die Scrapy-Stats gezählt (ein Dictionary mit Zählern,
-das jede Komponente lesen und schreiben kann):
-    progress/total   wie viele Seiten insgesamt zu laden sind
-    progress/done    erfolgreich verarbeitet
-    progress/failed  endgültig fehlgeschlagen (nach allen Retries)
-Die ProgressExtension (extensions.py) liest diese Werte und zeichnet daraus
-den Fortschrittsbalken. Die Stats stehen am Ende auch im Log.
+Progress is counted via the Scrapy stats (a dictionary of counters that every
+component can read and write):
+    progress/total   how many pages there are to load in total
+    progress/done    processed successfully
+    progress/failed  failed for good (after all retries)
+The ProgressExtension (extensions.py) reads these values and draws the
+progress bar from them. The stats also appear in the log at the end.
 """
 
 import scrapy
@@ -15,7 +15,7 @@ from ..items import FailureItem
 
 
 class ProgressSpider(scrapy.Spider):
-    # Text vor dem Fortschrittsbalken
+    # Text shown in front of the progress bar
     progress_label = "Scraping"
 
     def add_total(self, n: int) -> None:
@@ -25,19 +25,19 @@ class ProgressSpider(scrapy.Spider):
         self.crawler.stats.inc_value("progress/done")
 
     def on_error(self, failure):
-        """errback: wird aufgerufen, wenn ein Request endgültig scheitert.
+        """errback: called when a request fails for good.
 
-        Das passiert z.B., wenn alle Retries aufgebraucht sind (Timeout,
-        Verbindungsfehler) oder die Antwort einen Fehlerstatus (404, 500, ...)
-        hat. Ohne errback würde Scrapy den Fehler nur loggen. Wir zählen ihn
-        und speichern ihn in der Tabelle `failures`.
+        That happens e.g. when all retries are used up (timeout, connection
+        error) or the response has an error status (404, 500, ...). Without an
+        errback Scrapy would only log the error. We count it and store it in
+        the `failures` table.
         """
         request = failure.request
         self.crawler.stats.inc_value("progress/failed")
         self.logger.warning(
-            "Fehlgeschlagen: %s – %s", request.url, failure.getErrorMessage()[:200]
+            "Failed: %s – %s", request.url, failure.getErrorMessage()[:200]
         )
-        # Auch ein errback darf Items liefern. Dieses landet in der DB.
+        # An errback may yield items too. This one ends up in the DB.
         yield FailureItem(
             url=request.url,
             spider=self.name,

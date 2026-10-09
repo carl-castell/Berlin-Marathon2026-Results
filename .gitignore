@@ -1,6 +1,6 @@
-# --- Gescrapte Daten: NICHT veröffentlichen ------------------------------------
-# Die Ergebnisliste ist urheberrechtlich geschützt (nur private Nutzung) und
-# enthält Namen von Personen. Mit den Spidern lässt sie sich jederzeit neu erzeugen.
+# --- Scraped data: do NOT publish ---------------------------------------------------
+# The results list is protected by copyright (private use only) and contains
+# people's names. It can be recreated at any time with the spiders.
 data/
 *.db
 *.db-shm
@@ -9,28 +9,30 @@ data/
 *.sqlite
 *.sqlite3
 *.csv
+# ...except the public country reference list
+!marathon_scraper/countries.csv
 *.parquet
 *.jsonl
 *.json.gz
 
-# --- Scrapy ----------------------------------------------------------------------
-# HTTP-Cache (Roh-HTML aller Seiten) und JOBDIR-Zustand (Pause/Resume)
+# --- Scrapy -------------------------------------------------------------------------
+# HTTP cache (raw HTML of all pages) and JOBDIR state (pause/resume)
 .scrapy/
 jobs/
 logs/
 *.log
 
-# --- marimo ----------------------------------------------------------------------
-# Sitzungs-Cache mit Zellausgaben (kann Läuferdaten enthalten)
+# --- marimo -------------------------------------------------------------------------
+# Session cache with cell outputs (may contain runner data)
 __marimo__/
 
-# --- Python / uv -------------------------------------------------------------------
+# --- Python / uv --------------------------------------------------------------------
 .venv/
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
 
-# --- System / Editor ---------------------------------------------------------------
+# --- System / editor ----------------------------------------------------------------
 .DS_Store
 .vscode/
 .idea/

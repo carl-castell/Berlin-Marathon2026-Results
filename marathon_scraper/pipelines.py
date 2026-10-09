@@ -1,24 +1,29 @@
-"""Item-Pipeline: schreibt alle Items in eine SQLite-Datenbank.
+"""Item pipeline: writes all items into a SQLite database.
 
-Warum SQLite statt CSV?
-- Mehrere Tabellen (runners, details, splits), die man per SQL joinen kann.
-- UPSERT ("insert or update"): Läuft ein Spider zweimal, entstehen keine
-  Duplikate, vorhandene Zeilen werden einfach aktualisiert.
-- Der Detail-Spider kann per SQL abfragen, was noch fehlt -> fortsetzbar.
-- Polars liest SQLite direkt (pl.read_database).
+Why SQLite instead of CSV?
+- Several tables (runners, details, splits) that can be joined with SQL.
+- UPSERT ("insert or update"): running a spider twice creates no duplicates,
+  existing rows are simply updated.
+- The detail spider can query what is still missing -> resumable.
+- Polars reads SQLite directly (pl.read_database).
 
-Lebenszyklus einer Pipeline in Scrapy:
-  open_spider()   -> einmal beim Start   (DB öffnen, Tabellen anlegen)
-  process_item()  -> für jedes Item       (Zeile schreiben)
-  close_spider()  -> einmal am Ende       (commit, DB schließen)
+Lifecycle of a pipeline in Scrapy:
+  open_spider()   -> once at the start   (open DB, create tables)
+  process_item()  -> for every item      (write a row)
+  close_spider()  -> once at the end     (commit, close DB)
 """
 
+import logging
 import sqlite3
+from collections import Counter
 from dataclasses import asdict, fields
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .countries import create_view, ensure_relation, load_countries
 from .items import DetailItem, FailureItem, RunnerItem, SplitItem
+
+logger = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runners (
@@ -28,7 +33,7 @@ CREATE TABLE IF NOT EXISTS runners (
     place_ak      INTEGER,
     last_name     TEXT,
     first_name    TEXT,
-    nation        TEXT,
+    nation        TEXT REFERENCES countries(code),
     bib           TEXT,
     age_class     TEXT,
     club          TEXT,
@@ -71,7 +76,7 @@ CREATE TABLE IF NOT EXISTS splits (
     PRIMARY KEY (idp, split_key)
 );
 
--- Requests, die im LETZTEN Lauf des jeweiligen Spiders endgültig gescheitert sind.
+-- Requests that failed for good in the LAST run of the respective spider.
 CREATE TABLE IF NOT EXISTS failures (
     url        TEXT PRIMARY KEY,
     spider     TEXT,
@@ -80,7 +85,7 @@ CREATE TABLE IF NOT EXISTS failures (
 );
 """
 
-# Welche Item-Klasse in welche Tabelle gehört und was der Primärschlüssel ist.
+# Which item class goes into which table, and what its primary key is.
 TABLES = {
     RunnerItem: ("runners", ["idp"]),
     DetailItem: ("details", ["idp"]),
@@ -90,11 +95,11 @@ TABLES = {
 
 
 def upsert_sql(table: str, columns: list[str], key: list[str]) -> str:
-    """Baut ein 'INSERT ... ON CONFLICT DO UPDATE' für die Tabelle.
+    """Build an 'INSERT ... ON CONFLICT DO UPDATE' statement for the table.
 
-    Beispiel-Ergebnis:
-      INSERT INTO runners (idp, name, ...) VALUES (:idp, :name, ...)
-      ON CONFLICT (idp) DO UPDATE SET name = excluded.name, ...
+    Example result:
+      INSERT INTO runners (idp, last_name, ...) VALUES (:idp, :last_name, ...)
+      ON CONFLICT (idp) DO UPDATE SET last_name = excluded.last_name, ...
     """
     cols = ", ".join(columns)
     params = ", ".join(f":{c}" for c in columns)
@@ -106,8 +111,8 @@ def upsert_sql(table: str, columns: list[str], key: list[str]) -> str:
 
 
 class SQLitePipeline:
-    # Alle N Items committen. Ein Commit pro Item wäre sehr langsam,
-    # gar kein Commit bis zum Ende riskiert Datenverlust bei einem Absturz.
+    # Commit every N items. One commit per item would be very slow; no commit
+    # until the end would risk losing data in a crash.
     COMMIT_EVERY = 500
 
     def __init__(self, db_path: str, crawler=None):
@@ -115,7 +120,9 @@ class SQLitePipeline:
         self.crawler = crawler
         self.conn: sqlite3.Connection | None = None
         self.pending = 0
-        # SQL-Statements einmal vorbereiten, statt für jedes Item neu zu bauen.
+        self.known_countries: set[str] = set()
+        self.unknown_countries: Counter[str] = Counter()
+        # Prepare the SQL statements once instead of rebuilding them per item.
         self.statements = {
             cls: upsert_sql(table, [f.name for f in fields(cls)] + ["scraped_at"], key)
             for cls, (table, key) in TABLES.items()
@@ -123,24 +130,37 @@ class SQLitePipeline:
 
     @classmethod
     def from_crawler(cls, crawler):
-        # So kommt eine Pipeline an die Settings: Scrapy ruft from_crawler auf
-        # und übergibt den Crawler, der alle Einstellungen kennt.
+        # This is how a pipeline gets the settings: Scrapy calls from_crawler
+        # and passes the crawler, which knows all settings.
         return cls(db_path=crawler.settings.get("SQLITE_PATH"), crawler=crawler)
 
     def open_spider(self, spider=None):
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path)
-        # WAL erlaubt es, die DB (z.B. im Notebook) zu lesen, während gescrapt wird.
+        # WAL lets you read the DB (e.g. in the notebook) while scraping.
         self.conn.execute("PRAGMA journal_mode=WAL")
+        # countries first: runners.nation references countries.code
+        load_countries(self.conn)
         self.conn.executescript(SCHEMA)
-        # Alte Fehler dieses Spiders vergessen: Was diesmal wieder scheitert,
-        # landet neu in der Tabelle. (Der Detail-Spider holt fehlende Läufer
-        # sowieso automatisch nach.)
+        ensure_relation(self.conn)  # older DBs: add the foreign key
+        create_view(self.conn)
+        self.known_countries = {row[0] for row in self.conn.execute("SELECT code FROM countries")}
+        # Forget this spider's old failures: whatever fails again this time
+        # is added anew. (The detail spider retries missing runners anyway.)
         if self.crawler and self.crawler.spider:
             self.conn.execute("DELETE FROM failures WHERE spider = ?", (self.crawler.spider.name,))
             self.conn.commit()
 
     def close_spider(self, spider=None):
+        if self.unknown_countries:
+            codes = ", ".join(f"{c} ({n}x)" for c, n in self.unknown_countries.most_common())
+            logger.warning(
+                "Country codes not in countries.csv: %s. The runners are saved, but have no "
+                "country name. Fix: add the codes to EXTRA in scripts/build_countries.py "
+                "(or directly to marathon_scraper/countries.csv), regenerate, then run "
+                "`uv run python -m marathon_scraper.countries`.",
+                codes,
+            )
         if self.conn:
             self.conn.commit()
             self.conn.close()
@@ -148,12 +168,40 @@ class SQLitePipeline:
     def process_item(self, item, spider=None):
         sql = self.statements.get(type(item))
         if sql is None:
-            return item  # unbekannter Typ -> unverändert weiterreichen
+            return item  # unknown type -> pass through unchanged
+        if isinstance(item, RunnerItem):
+            self.check_country(item)
         row = asdict(item) | {"scraped_at": datetime.now(timezone.utc).isoformat()}
         self.conn.execute(sql, row)
         self.pending += 1
         if self.pending >= self.COMMIT_EVERY:
             self.conn.commit()
             self.pending = 0
-        # Items immer zurückgeben, damit evtl. weitere Pipelines sie auch bekommen.
+        # Always return the item so further pipelines (if any) receive it too.
         return item
+
+    def check_country(self, item: RunnerItem) -> None:
+        """Warn about country codes missing from the `countries` table.
+
+        SQLite doesn't enforce foreign keys by default, so the runner is still
+        saved (no data loss); only the country name in runners_with_country
+        stays empty until the code is added to countries.csv.
+        """
+        code = item.nation
+        if code is None or code in self.known_countries:
+            return
+        if code not in self.unknown_countries:
+            logger.warning(
+                "Unknown country code %r (e.g. bib %s) – not in countries.csv. "
+                "Runner is saved without a country name.",
+                code,
+                item.bib,
+            )
+        self.unknown_countries[code] += 1
+        if self.crawler:
+            stats = self.crawler.stats
+            stats.inc_value("countries/unknown_runners")
+            stats.set_value(
+                "countries/unknown_codes",
+                ", ".join(f"{c} ({n}x)" for c, n in self.unknown_countries.most_common()),
+            )

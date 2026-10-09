@@ -1,1 +1,1 @@
-# Scrapy findet hier automatisch alle Spider-Klassen (SPIDER_MODULES in settings.py).
+# Scrapy automatically finds all spider classes here (SPIDER_MODULES in settings.py).

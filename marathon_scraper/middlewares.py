@@ -1,26 +1,26 @@
-"""Downloader-Middleware: Reaktion auf Rate-Limiting / Blockieren.
+"""Downloader middleware: reacting to rate limiting / blocking.
 
-Was passiert ohne diese Middleware?
-Scrapys RetryMiddleware versucht einen Request bei 429/503 bis zu RETRY_TIMES
-mal erneut, und zwar sofort. Wenn der Server sagt „zu viele Anfragen“, wird es
-dadurch eher schlimmer. Danach wird der Request verworfen.
+What happens without this middleware?
+Scrapy's RetryMiddleware retries a request on 429/503 up to RETRY_TIMES times,
+and does so immediately. When the server says "too many requests", that tends
+to make things worse. After that the request is dropped.
 
-Was macht diese Middleware?
-Antwortet der Server mit einem „Bremse!“-Status (429 Too Many Requests,
-503 Service Unavailable, 403 Forbidden), dann
-  1. pausiert sie den GANZEN Crawl (keine neuen Requests),
-  2. wartet, und zwar jedes Mal länger (exponential backoff: 30 s, 60 s,
-     120 s, ... bis max. 10 min). Schickt der Server einen „Retry-After“-Header,
-     wird mindestens so lange gewartet,
-  3. plant den Request danach neu ein. Es geht also nichts verloren,
-  4. gibt nach BACKOFF_MAX_STRIKES Pausen in Folge auf und beendet den Spider
-     sauber (Grund „blocked“). Alles bis dahin ist in der DB gespeichert, ein
-     Neustart später macht dort weiter.
-Kommt wieder eine normale Antwort (200), wird der Zähler zurückgesetzt.
+What does this middleware do?
+When the server answers with a "slow down!" status (429 Too Many Requests,
+503 Service Unavailable, 403 Forbidden), it
+  1. pauses the WHOLE crawl (no new requests),
+  2. waits, longer each time (exponential backoff: 30 s, 60 s, 120 s, ... up
+     to 10 min). If the server sends a "Retry-After" header, it waits at least
+     that long,
+  3. reschedules the request afterwards, so nothing is lost,
+  4. gives up after BACKOFF_MAX_STRIKES pauses in a row and closes the spider
+     cleanly (reason "blocked"). Everything up to that point is saved in the
+     DB; a later restart continues from there.
+As soon as a normal response (200) arrives again, the counter is reset.
 
-Wo sitzt sie? Downloader-Middlewares bilden eine Kette zwischen Engine und
-Downloader. process_response läuft von der höchsten Zahl zur niedrigsten.
-Mit 560 sehen wir die Antwort VOR der RetryMiddleware (550), siehe settings.py.
+Where does it sit? Downloader middlewares form a chain between the engine and
+the downloader. process_response runs from the highest number to the lowest.
+With 560 we see the response BEFORE the RetryMiddleware (550), see settings.py.
 """
 
 import asyncio
@@ -40,8 +40,8 @@ class BackoffMiddleware:
         self.base = s.getfloat("BACKOFF_BASE_SECONDS", 30)
         self.max_wait = s.getfloat("BACKOFF_MAX_SECONDS", 600)
         self.max_strikes = s.getint("BACKOFF_MAX_STRIKES", 6)
-        self.strikes = 0  # Pausen in Folge ohne erfolgreiche Antwort dazwischen
-        self.resume_at = 0.0  # time.time(), bis wann pausiert wird
+        self.strikes = 0  # pauses in a row without a successful response in between
+        self.resume_at = 0.0  # time.time() until which we pause
         self.gave_up = False
 
     @classmethod
@@ -55,19 +55,19 @@ class BackoffMiddleware:
             return response
 
         if self.gave_up:
-            raise IgnoreRequest(f"Spider wird beendet (HTTP {response.status})")
+            raise IgnoreRequest(f"Spider is shutting down (HTTP {response.status})")
 
         stats = self.crawler.stats
         now = time.time()
-        # Mehrere parallele Requests bekommen gleichzeitig 429. Nur die ERSTE
-        # Antwort einer Welle zählt als neuer "Strike", die anderen warten mit.
+        # Several parallel requests get a 429 at the same time. Only the FIRST
+        # response of a wave counts as a new "strike"; the others wait along.
         if now >= self.resume_at:
             self.strikes += 1
             if self.strikes > self.max_strikes:
                 self.gave_up = True
                 logger.error(
-                    "Server blockiert weiterhin (HTTP %s) nach %d Pausen – Spider wird beendet. "
-                    "Später einfach neu starten, bereits gespeicherte Daten bleiben erhalten.",
+                    "Server keeps blocking (HTTP %s) after %d pauses – closing the spider. "
+                    "Just restart later; data saved so far is kept.",
                     response.status,
                     self.max_strikes,
                 )
@@ -80,28 +80,28 @@ class BackoffMiddleware:
             stats.inc_value("backoff/count")
             stats.set_value("backoff/resume_at", self.resume_at)
             logger.warning(
-                "HTTP %s – Server bremst. Pause %d s (Pause %d von max. %d), danach geht es weiter.",
+                "HTTP %s – server is throttling us. Pausing %d s (pause %d of max. %d), then continuing.",
                 response.status,
                 wait,
                 self.strikes,
                 self.max_strikes,
             )
 
-        # Engine pausieren: es werden keine neuen Requests mehr losgeschickt.
+        # Pause the engine: no new requests are sent.
         self.crawler.engine.pause()
         await asyncio.sleep(max(0.0, self.resume_at - time.time()))
         self.crawler.engine.unpause()
         stats.set_value("backoff/resume_at", 0)
 
-        # Gibt eine Middleware einen Request statt einer Response zurück, plant
-        # Scrapy ihn neu ein. dont_filter=True, sonst hält der Duplikatfilter
-        # ihn für schon erledigt.
+        # When a middleware returns a Request instead of a Response, Scrapy
+        # schedules it again. dont_filter=True, otherwise the duplicate filter
+        # considers it already done.
         stats.inc_value("backoff/requeued")
         return request.replace(dont_filter=True)
 
     @staticmethod
     def retry_after(response) -> float:
-        """Header 'Retry-After: 120' -> 120.0 (Datumsformat ignorieren wir)."""
+        """Header 'Retry-After: 120' -> 120.0 (we ignore the date format)."""
         value = response.headers.get(b"Retry-After")
         try:
             return float(value.decode()) if value else 0.0

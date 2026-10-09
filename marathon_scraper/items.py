@@ -1,13 +1,13 @@
-"""Items = die Datenstrukturen, die unsere Spider erzeugen.
+"""Items = the data structures our spiders produce.
 
-Scrapy akzeptiert dicts, scrapy.Item oder (wie hier) dataclasses. Dataclasses
-sind am angenehmsten: feste Felder, Autovervollständigung in der IDE, und
-Tippfehler bei Feldnamen fallen sofort auf.
+Scrapy accepts dicts, scrapy.Item or (as here) dataclasses. Dataclasses are the
+most pleasant: fixed fields, autocompletion in the IDE, and typos in field
+names show up immediately.
 
-Alle Zeiten speichern wir bewusst als Text ("02:02:50"), also genau so wie sie
-auf der Seite stehen. Umwandeln (in Sekunden/Duration) machen wir später in
-Polars. So geht beim Scrapen nichts verloren und Parsing-Fehler lassen sich
-später korrigieren, ohne neu zu scrapen.
+All times are deliberately stored as text ("02:02:50"), exactly as they appear
+on the site. Converting them (to seconds/durations) happens later in Polars.
+That way nothing is lost while scraping, and parsing mistakes can be fixed
+later without scraping again.
 """
 
 from dataclasses import dataclass
@@ -15,62 +15,62 @@ from dataclasses import dataclass
 
 @dataclass
 class RunnerItem:
-    """Eine Zeile aus der Ergebnisliste (Schritt 1)."""
+    """One row of the results list (step 1)."""
 
-    idp: str  # interne ID des Läufers bei mikatiming, eindeutig -> Primärschlüssel
-    sex: str  # "M", "W" oder "X" (= divers), aus dem Listenfilter
-    place_overall: int | None  # Platz innerhalb des Geschlechts
-    place_ak: int | None  # Platz in der Altersklasse
-    last_name: str  # Nachname
-    first_name: str | None  # Vorname(n); fehlt bei manchen Einträgen
+    idp: str  # mikatiming's internal runner ID, unique -> primary key
+    sex: str  # "M", "W" or "X" (= diverse), from the list filter
+    place_overall: int | None  # place within the runner's sex
+    place_ak: int | None  # place within the age group
+    last_name: str
+    first_name: str | None  # missing for some entries
     nation: str | None  # "GER", "ETH", ...
-    bib: str  # Startnummer (Text, da z.B. "F2" vorkommt)
-    age_class: str  # AK, z.B. "35", "H" (Hauptklasse)
+    bib: str  # bib number (text, because values like "F2" exist)
+    age_class: str  # age group, e.g. "35", "H" (main class)
     club: str | None
-    time_brutto: str | None  # Zeit ab Startschuss
-    time_netto: str | None  # Zeit ab Überqueren der Startlinie
+    time_brutto: str | None  # gun time (from the starting gun)
+    time_netto: str | None  # net time (from crossing the start line)
     detail_url: str
-    list_page: int  # Seite der Liste, auf der der Läufer stand (zum Debuggen)
+    list_page: int  # list page the runner was on (for debugging)
 
 
 @dataclass
 class DetailItem:
-    """Zusätzliche Infos von der Detailseite eines Läufers (Schritt 2)."""
+    """Additional info from a runner's detail page (step 2)."""
 
     idp: str
-    status: str | None  # z.B. "Finished"
+    status: str | None  # e.g. "Finished"
     last_split: str | None
     place_sex: int | None
     place_ak: int | None
-    place_total: int | None  # Platz über alle Geschlechter
+    place_total: int | None  # place across all sexes
     time_netto: str | None
     time_brutto: str | None
-    start_time_netto: str | None  # Tageszeit, zu der die Startlinie überquert wurde
+    start_time_netto: str | None  # time of day the runner crossed the start line
     start_time_brutto: str | None
-    hm1_time: str | None  # erste Hälfte
+    hm1_time: str | None  # first half
     hm1_place: int | None
-    hm2_time: str | None  # zweite Hälfte
+    hm2_time: str | None  # second half
     hm2_place: int | None
 
 
 @dataclass
 class SplitItem:
-    """Eine Zwischenzeit. Pro Läufer gibt es mehrere -> eigene Tabelle (long format)."""
+    """One split time. Each runner has several -> separate table (long format)."""
 
     idp: str
-    split_key: str  # stabiler Schlüssel aus der CSS-Klasse, z.B. "time_05", "time_finish_netto"
-    split_name: str  # Anzeige-Text, z.B. "5 km", "Halb", "Finish"
-    seq: int  # Reihenfolge auf der Seite
+    split_key: str  # stable key from the CSS class, e.g. "time_05", "time_finish_netto"
+    split_name: str  # display text, e.g. "5 km", "Halb", "Finish"
+    seq: int  # order on the page
     time_of_day: str | None
-    time: str | None  # kumulierte Zeit seit Start
-    diff: str | None  # Zeit seit letztem Split
+    time: str | None  # cumulative time since the start
+    diff: str | None  # time since the previous split
     pace_min_km: str | None
     kmh: float | None
 
 
 @dataclass
 class FailureItem:
-    """Ein Request, der endgültig gescheitert ist (wird im errback erzeugt)."""
+    """A request that failed for good (created in the errback)."""
 
     url: str
     spider: str

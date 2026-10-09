@@ -1,21 +1,21 @@
-"""Wissen über die Webseite (URLs, Parameter, kleine Parse-Helfer).
+"""Knowledge about the website (URLs, parameters, small parsing helpers).
 
-An einem Ort gesammelt, damit beide Spider dasselbe verwenden. Für ein anderes
-Jahr müssen meist nur YEAR und EVENT angepasst werden (EVENT findet man in den
-Links der Ergebnisliste: "...&event=BML_...").
+Kept in one place so both spiders use the same values. For another year you
+usually only need to change YEAR and EVENT (EVENT appears in the links of the
+results list: "...&event=BML_...").
 """
 
 from urllib.parse import urlencode
 
 YEAR = 2026
-EVENT = "BML_HCH3C0OH37C"  # "Läufer" (andere Events: Skater, Handbiker, ...)
+EVENT = "BML_HCH3C0OH37C"  # "Runner" (other events: inline skaters, handbikers, ...)
 BASE_URL = f"https://berlin.r.mikatiming.com/{YEAR}/"
-PAGE_SIZE = 100  # mehr als 100 Ergebnisse pro Seite erlaubt die Seite nicht
-LANG = "EN_CAP"  # feste Sprache, damit Texte wie "Finished" immer gleich sind
+PAGE_SIZE = 100  # the site does not allow more than 100 results per page
+LANG = "EN_CAP"  # fixed language so texts like "Finished" are always the same
 
 
 def list_url(sex: str, page: int) -> str:
-    """URL einer Ergebnisseite, gefiltert nach Geschlecht."""
+    """URL of a results page, filtered by sex."""
     params = {
         "pid": "list",
         "event": EVENT,
@@ -28,25 +28,25 @@ def list_url(sex: str, page: int) -> str:
 
 
 def detail_url(idp: str) -> str:
-    """URL der Detailseite. Nur idp + event sind wirklich nötig."""
+    """URL of the detail page. Only idp + event are actually required."""
     return BASE_URL + "?" + urlencode(
         {"content": "detail", "idp": idp, "event": EVENT, "lang": LANG}
     )
 
 
 def decode_silver(data_silver: str) -> str:
-    """Dekodiert die 'versteckten' Links der Seite.
+    """Decode the site's "hidden" links.
 
-    Statt <a href="?page=2"> steht dort <a data-silver="63,112,97,...">.
-    Das sind einfach ASCII-Codes: 63='?', 112='p', 97='a' ... -> "?page=2&amp;...".
-    Ein Stück JavaScript baut daraus beim Klick den echten Link. Das soll
-    simple Bots abhalten - für uns ist es eine Zeile Python.
+    Instead of <a href="?page=2"> the site uses <a data-silver="63,112,97,...">.
+    These are plain ASCII codes: 63='?', 112='p', 97='a' ... -> "?page=2&amp;...".
+    A bit of JavaScript turns them into the real link on click. It is meant to
+    stop simple bots - for us it is one line of Python.
     """
     return "".join(chr(int(c)) for c in data_silver.split(","))
 
 
 def clean(text: str | None) -> str | None:
-    """Whitespace entfernen; leere Werte und Platzhalter ('–', '-') -> None."""
+    """Normalize whitespace; empty values and placeholders ('–', '-') -> None."""
     if text is None:
         return None
     text = " ".join(text.split())

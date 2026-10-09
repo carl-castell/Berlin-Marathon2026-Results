@@ -1,0 +1,12 @@
+[project]
+name = "marathon"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "altair>=6.3.0",
+    "marimo>=0.25.1",
+    "polars>=2.0.0",
+    "pyarrow>=26.0.0",
+    "rich>=15.0.0",
+    "scrapy>=2.19.0",
+]

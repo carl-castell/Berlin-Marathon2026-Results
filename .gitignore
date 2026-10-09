@@ -1,0 +1,36 @@
+# --- Gescrapte Daten: NICHT veröffentlichen ------------------------------------
+# Die Ergebnisliste ist urheberrechtlich geschützt (nur private Nutzung) und
+# enthält Namen von Personen. Mit den Spidern lässt sie sich jederzeit neu erzeugen.
+data/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite
+*.sqlite3
+*.csv
+*.parquet
+*.jsonl
+*.json.gz
+
+# --- Scrapy ----------------------------------------------------------------------
+# HTTP-Cache (Roh-HTML aller Seiten) und JOBDIR-Zustand (Pause/Resume)
+.scrapy/
+jobs/
+logs/
+*.log
+
+# --- marimo ----------------------------------------------------------------------
+# Sitzungs-Cache mit Zellausgaben (kann Läuferdaten enthalten)
+__marimo__/
+
+# --- Python / uv -------------------------------------------------------------------
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# --- System / Editor ---------------------------------------------------------------
+.DS_Store
+.vscode/
+.idea/

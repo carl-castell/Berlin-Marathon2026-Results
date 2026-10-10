@@ -28,7 +28,12 @@ from scrapy.exceptions import NotConfigured
 
 # These loggers may also write INFO messages to the console
 # (e.g. "Received SIGINT, shutting down gracefully" from scrapy.crawler).
-CONSOLE_INFO_LOGGERS = ("scrapy.crawler", "results_list", "results_detail", "marathon_scraper")
+CONSOLE_INFO_LOGGERS = (
+    "scrapy.crawler",
+    "results_list",
+    "results_detail",
+    "marathon_scraper",
+)
 
 
 class ConsoleFilter(logging.Filter):

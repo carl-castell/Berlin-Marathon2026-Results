@@ -96,7 +96,11 @@ class ResultsDetailSpider(ProgressSpider):
         for seq, tr in enumerate(response.css("#detail-box-splits tbody tr")):
             # Class e.g. "list-highlight f-time_10" -> key "time_10"
             classes = (tr.attrib.get("class") or "").split()
-            key = next((c[2:] for c in classes if c.startswith("f-")), f"row_{seq}")
+            key = next((c[2:] for c in classes if c.startswith("f-")), None)
+            if key is None:
+                # No split row, e.g. the "available with tracking code" box on
+                # pages of runners who did not start.
+                continue
 
             def cell(cls: str) -> str | None:
                 return clean(tr.css(f"td.{cls}::text").get())

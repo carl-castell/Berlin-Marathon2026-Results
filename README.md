@@ -26,10 +26,11 @@ uv sync
 ## Usage
 
 ```bash
-# Step 1: results lists, ~500 pages, ~5 min
+# Step 1: all runners – finishers from the ranking, plus runners without a place
+# (did not finish, did not start, ...) from the search view; ~1,000 pages, ~10 min
 uv run scrapy crawl results_list
 
-# Step 2: detail pages + splits, ~50,000 pages, ~4–4.5 h
+# Step 2: detail pages + splits, ~50,000 pages, ~4–4.5 h (only missing ones)
 caffeinate -i uv run scrapy crawl results_detail
 
 # Analysis
@@ -44,7 +45,9 @@ Options:
 | Command | Effect |
 |---|---|
 | `-a sex=W` | only one category (`M`, `W`, `X`; default `M,W,X`) |
-| `-a max_pages=2` | limit list pages per category (testing) |
+| `-a max_pages=2` | limit list pages per category and view (testing) |
+| `-a unranked=false` | step 1: finishers only (skip the search view) |
+| `-a ranked=false` | step 1: only runners without a place (skip the ranking) |
 | `-a limit=20` | limit number of detail pages (testing) |
 | `-s HTTPCACHE_ENABLED=False` | don't cache raw HTML in `.scrapy/` (~1.5 GB for a full run) |
 | `-s PROGRESS_ENABLED=False -s LOG_FILE=` | plain Scrapy log output instead of the progress bar |
@@ -57,8 +60,8 @@ Full log: `logs/scrapy.log`. Failed requests: table `failures`.
 
 | Table | Content | Key |
 |---|---|---|
-| `runners` | place, place in age group, last/first name, nation, bib, age group, club, gun + net time, sex (`M`/`W`/`X` = diverse) | `idp`; `nation` → `countries.code` |
-| `details` | status, place by sex/age group/overall, start times, half-marathon times + places | `idp` |
+| `runners` | finishers and runners without a place (place and times empty); place, place in age group, last/first name, nation, bib, age group, club, gun + net time, sex (`M`/`W`/`X` = diverse) | `idp`; `nation` → `countries.code` |
+| `details` | status (`Finished`, `Did Not Finish`, `Not Started`, …), last split reached, place by sex/age group/overall, start times, half-marathon times + places | `idp` |
 | `splits` | 5 km … 40 km, half, finish: time of day, time, diff, min/km, km/h (long format) | `idp`, `split_key` |
 | `failures` | requests that failed in the last run | `url` |
 | `countries` | country code as used by the site (IOC, else ISO alpha-3), ISO alpha-3/alpha-2, English + German name (250 rows, from `marathon_scraper/countries.csv`) | `code` |
@@ -68,7 +71,15 @@ All times are stored as text (`HH:MM:SS`).
 
 ```sql
 SELECT country_de, count(*) FROM runners_with_country GROUP BY 1 ORDER BY 2 DESC;
+
+-- status of all runners
+SELECT status, count(*) FROM details GROUP BY 1;
+
+-- where runners quit
+SELECT last_split, count(*) FROM details WHERE status = 'Did Not Finish' GROUP BY 1;
 ```
+
+Finishers only: `details.status = 'Finished'` (or `runners.place_overall IS NOT NULL`).
 
 Add the `countries` table to a database created before it existed (backup first):
 

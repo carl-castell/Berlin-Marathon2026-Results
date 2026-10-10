@@ -27,6 +27,11 @@ def list_url(sex: str, page: int) -> str:
     return BASE_URL + "?" + urlencode(params)
 
 
+def search_url(sex: str, page: int) -> str:
+    """URL of a page of the search view: all entries, incl. runners without a place."""
+    return list_url(sex, page).replace("pid=list", "pid=search", 1)
+
+
 def detail_url(idp: str) -> str:
     """URL of the detail page. Only idp + event are actually required."""
     return BASE_URL + "?" + urlencode(

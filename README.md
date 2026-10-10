@@ -40,6 +40,9 @@ uv run marimo edit notebooks/analyse.py
 Step 2 can be stopped with Ctrl-C and restarted at any time; it only fetches
 runners without details.
 
+Notebooks share their setup via `notebooks/marathon_data.py` (load, cleaning rules,
+table display). New notebook: `cp notebooks/template.py notebooks/<name>.py`.
+
 Options:
 
 | Command | Effect |

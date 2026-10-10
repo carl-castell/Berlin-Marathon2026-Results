@@ -1,4 +1,6 @@
-# Berlin Marathon 2026 – Results Scraper
+# Berlin Marathon 2026 Results
+
+## Results scraper and analysis tool
 
 Scrapes the runner results of the BMW Berlin Marathon 2026 from
 <https://berlin.r.mikatiming.com/2026/> into a SQLite database and provides a
@@ -120,19 +122,18 @@ Backup:
 sqlite3 data/marathon.db ".backup data/marathon_backup_$(date +%F).db"
 ```
 
-## Findings (scraped 2026-10-09, unofficial results)
+## Built with
 
-| | Men | Women | Diverse | Total |
-|---|---|---|---|---|
-| Finishers | 32,090 | 17,941 | 53 | **50,084** |
-| Fastest | 2:02:50 | 2:11:04 | 2:54:26 | |
-| Median | 3:58:48 | 4:30:57 | 4:21:45 | 4:11:20 |
-| Slowest | 8:39:13 | 7:59:21 | 6:28:10 | |
+| Tool | Purpose | License |
+|---|---|---|
+| [Scrapy](https://scrapy.org) | scraping | BSD-3-Clause |
+| [Polars](https://pola.rs) | DataFrames | MIT |
+| [marimo](https://marimo.io) | notebooks | Apache-2.0 |
+| [seaborn](https://seaborn.pydata.org) / [matplotlib](https://matplotlib.org) | plots | BSD-3-Clause / PSF-based |
+| [Rich](https://github.com/Textualize/rich) | console progress bar | MIT |
+| [pycountry](https://github.com/pycountry/pycountry), [country_converter](https://github.com/IndEcol/country_converter) | generating `marathon_scraper/countries.csv` (dev only) | LGPL-2.1, GPL-3.0 |
 
-- 167 nations; most runners from GER (17,108), USA (7,041), GBR (2,885), BRA (1,820), FRA (1,425).
-- Under 3 h: 7.5 % · under 4 h: 43.2 % · under 5 h: 78.2 %.
-- Negative split (second half faster): 10.3 % of runners; median second half is 8.9 % slower than the first.
-- Start line crossings (net start) from 08:45:01 to 11:00:23.
-- 1,122 runners have missing split / half-marathon times (finish time is always present).
-- Tied times share a place and the next place is skipped; 13 further place numbers are missing from the site's list.
-- The site's sex filter only accepts `M`, `W`, `X`; other values silently return the men's list.
+## License
+
+The code is licensed under the [MIT License](LICENSE) – © 2026 Carl Castell.
+This does not cover the scraped results data (see the disclaimer above).

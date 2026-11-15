@@ -25,7 +25,7 @@ def _():
         run_sql,
         save_figure,
     )
-    from maps import country_map, save_map, show_map
+    from maps import color_legend, country_map, save_map, show_map
     from branca.colormap import LinearColormap, StepColormap
 
     sns.set_theme()
@@ -40,6 +40,7 @@ def _():
         StepColormap,
         add_analysis_columns,
         clean,
+        color_legend,
         country_map,
         format_time,
         load_runners_raw,
@@ -184,10 +185,18 @@ def _(finishers, format_time, pl):
             (pl.col("sex") == "W").sum().alias("women"),
             (pl.col("sex") == "X").sum().alias("diverse"),
             pl.col("net_time").median().alias("median_minutes"),
+            # middle 50% of runners: from the 25% to the 75% quantile
+            pl.col("net_time").quantile(0.25).alias("quantile_25_minutes"),
+            pl.col("net_time").quantile(0.75).alias("quantile_75_minutes"),
             (_is_elite_time.mean() * 100).alias("elite_share_%"),
         )
         .with_columns(
-            pl.col("median_minutes").map_elements(format_time, return_dtype=pl.String).alias("median_time")
+            pl.col("median_minutes").map_elements(format_time, return_dtype=pl.String).alias("median_time"),
+            pl.concat_str(
+                pl.col("quantile_25_minutes").map_elements(format_time, return_dtype=pl.String),
+                pl.col("quantile_75_minutes").map_elements(format_time, return_dtype=pl.String),
+                separator=" – ",
+            ).alias("middle_50_percent"),
         )
         .sort("finishers", descending=True)
     )
@@ -197,6 +206,7 @@ def _(finishers, format_time, pl):
 @app.cell(hide_code=True)
 def _(
     StepColormap,
+    color_legend,
     country_map,
     finishers,
     finishers_per_country,
@@ -217,10 +227,13 @@ def _(
     _runners_map = country_map(finishers_per_country, color_column="finishers", colormap=_finishers_colormap,
                                tooltip_columns={"finishers": "finishers", "men": "men", "women": "women",
                                                 "diverse": "diverse"})
-    save_map(_runners_map, "runners_per_country")
+    _runners_map_view = show_map(_runners_map)
+    _runners_legend = color_legend(_finishers_colormap, "finishers per country",
+                                   {1: "1", 10: "10", 100: "100", 1_000: "1,000", 10_000: "10,000", 20_000: ""})
+    save_map(_runners_map, "runners_per_country", legend=_finishers_colormap)
 
     _top_countries = finishers_per_country.head(10)
-    _figure, _axes = plt.subplots(figsize=(6, 5.5))
+    _figure, _axes = plt.subplots(figsize=(6, 4.5))
     sns.barplot(_top_countries.to_pandas(), x="finishers", y="country", color="C0", ax=_axes)
     _axes.bar_label(_axes.containers[0], fmt="{:,.0f}", padding=3)
     _axes.set(xlabel="finishers", ylabel="", title="Top 10 countries by finishers")
@@ -234,7 +247,7 @@ def _(
 
         {finishers_per_country.height} nations · only **{_german_share:.0%}** of finishers are German
         """),
-        mo.hstack([show_map(_runners_map), _figure], widths=[3, 2], align="center"),
+        mo.hstack([mo.vstack([_runners_map_view, _runners_legend]), _figure], widths=[3, 2], align="center"),
     ])
     return
 
@@ -242,6 +255,7 @@ def _(
 @app.cell(hide_code=True)
 def _(
     LinearColormap,
+    color_legend,
     country_map,
     finishers_per_country,
     mo,
@@ -264,11 +278,18 @@ def _(
     )
     _median_map = country_map(_countries_with_enough_runners, color_column="median_minutes",
                               colormap=_median_colormap,
-                              tooltip_columns={"median_time": "median time", "finishers": "finishers"})
-    save_map(_median_map, "median_time_per_country")
+                              tooltip_columns={"median_time": "median time",
+                                               "middle_50_percent": "middle 50% of runners",
+                                               "finishers": "finishers"})
+    _median_map_view = show_map(_median_map)
+    _median_legend = color_legend(
+        _median_colormap, f"median finish time (countries with ≥ {_minimum_finishers} finishers; grey = fewer)",
+        {200: "≤ 3:20", 225: "3:45", 250: "4:10", 275: "4:35", 300: "≥ 5:00"},
+    )
+    save_map(_median_map, "median_time_per_country", legend=_median_colormap)
 
     _fastest_countries = _countries_with_enough_runners.sort("median_minutes").head(10)
-    _figure, _axes = plt.subplots(figsize=(6, 5.5))
+    _figure, _axes = plt.subplots(figsize=(6, 4.5))
     sns.barplot(_fastest_countries.to_pandas(), x="median_minutes", y="country", color="#E31A1C", ax=_axes)
     _bar_labels = [
         f"{row['median_time']} · {row['finishers']} runners · {row['elite_share_%']:.0f}% elite"
@@ -287,19 +308,28 @@ def _(
         (finishers_per_country["elite_share_%"] * finishers_per_country["finishers"]).sum()
         / finishers_per_country["finishers"].sum()
     )
+    fastest_countries_finding = mo.md(f"""
+    ## Fastest countries: findings
+
+    - **{_fastest['country']}** is fastest (median {_fastest['median_time']}), but only {_fastest['finishers']} of its
+      runners finished, and **{_fastest['elite_share_%']:.0f}%** of them ran elite times (overall: {_overall_elite_share:.1f}%).
+    - Small delegations are often selected athletes, big ones are mostly amateurs:
+      the fewer runners a country sends, the higher the share of professionals can be.
+    - Among countries with ≥ 100 finishers, **{_fastest_large[0]['country']}** ({_fastest_large[0]['median_time']})
+      and **{_fastest_large[1]['country']}** ({_fastest_large[1]['median_time']}) are fastest.
+
+    *Elite = men under 2:30, women under 2:50.*
+    """)
     mo.vstack([
         mo.md("## Where are runners fastest on average?"),
-        mo.hstack([show_map(_median_map), _figure], widths=[3, 2], align="center"),
-        mo.md(f"""
-        **{_fastest['country']}** is fastest (median {_fastest['median_time']}), but only {_fastest['finishers']} of its
-        runners finished, and **{_fastest['elite_share_%']:.0f}%** of them ran elite times (overall: {_overall_elite_share:.1f}%).
-        Small delegations are often selected athletes, big ones are mostly amateurs: the fewer runners a country sends,
-        the higher the share of professionals can be. Among countries with ≥ 100 finishers,
-        **{_fastest_large[0]['country']}** ({_fastest_large[0]['median_time']}) and
-        **{_fastest_large[1]['country']}** ({_fastest_large[1]['median_time']}) are fastest.
-        *Elite = men under 2:30, women under 2:50.*
-        """),
+        mo.hstack([mo.vstack([_median_map_view, _median_legend]), _figure], widths=[3, 2], align="center"),
     ])
+    return (fastest_countries_finding,)
+
+
+@app.cell(hide_code=True)
+def _(fastest_countries_finding):
+    fastest_countries_finding
     return
 
 

@@ -88,6 +88,11 @@ def _(mo):
     # Berlin Marathon 2026
     ## What 50,000 finishers tell us about pacing, age and the wall
 
+    I scraped the official results of the BMW Berlin Marathon 2026: 51,347 runners with up to
+    10 timing points each. With this data I look at where the runners come from and answer five questions:
+    how finish times change with age, who runs the second half faster, where runners hit the wall,
+    whether round target times shape when people finish, and who drops out.
+
     Data Science Marathon · final project · Carl Castell
     """)
     return

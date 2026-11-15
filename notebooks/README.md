@@ -3,6 +3,11 @@
 Data Science Marathon hand-in: what the results of the BMW Berlin Marathon 2026
 tell us about pacing, age and the wall.
 
+I scraped the official results of the BMW Berlin Marathon 2026: 51,347 runners with up to
+10 timing points each. With this data I look at where the runners come from and answer five questions:
+how finish times change with age, who runs the second half faster, where runners hit the wall,
+whether round target times shape when people finish, and who drops out.
+
 ← [Back to the main README](../README.md) · Data collection: [marathon_scraper/README.md](../marathon_scraper/README.md)
 
 ## View the results

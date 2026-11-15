@@ -11,10 +11,14 @@ def _():
     import polars as pl
     import seaborn as sns
 
-    from marathon_data import clean, hms, load_runners_raw, minutes, show, sql
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # marathon_data.py lives one level up
+    from marathon_data import clean, format_time, load_runners_raw, show_table, to_minutes
 
     sns.set_theme()
-    return clean, load_runners_raw, show
+    return clean, load_runners_raw, show_table
 
 
 @app.cell
@@ -31,8 +35,8 @@ def _(clean, runners_raw):
 
 
 @app.cell
-def _(runners, show):
-    show(runners)
+def _(runners, show_table):
+    show_table(runners)
     return
 
 

@@ -5,40 +5,38 @@ app = marimo.App(width="full")
 
 
 @app.cell
-def _(mo):
-    mo.md("""
-    # New notebook
-    """)
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md("""
-    ## 1 · Setup
-    """)
-    return
-
-
-@app.cell
 def _():
     import marimo as mo
     import matplotlib.pyplot as plt
     import polars as pl
     import seaborn as sns
 
-    from marathon_data import clean, hms, load_runners_raw, minutes, show, sql
+    from marathon_data import (
+        AGE_CLASS_ORDER,
+        FINISH_TIME_GROUP_ORDER,
+        add_analysis_columns,
+        clean,
+        format_time,
+        load_runners_raw,
+        save_figure,
+        show_table,
+    )
 
     sns.set_theme()
-    return clean, load_runners_raw, mo
-
-
-@app.cell
-def _(mo):
-    mo.md("""
-    ## 2 · Load data
-    """)
-    return
+    return (
+        AGE_CLASS_ORDER,
+        FINISH_TIME_GROUP_ORDER,
+        add_analysis_columns,
+        clean,
+        format_time,
+        load_runners_raw,
+        mo,
+        pl,
+        plt,
+        save_figure,
+        show_table,
+        sns,
+    )
 
 
 @app.cell
@@ -48,18 +46,17 @@ def _(load_runners_raw):
 
 
 @app.cell
-def _(mo):
-    mo.md("""
-    ## 3 · Cleaning
-    """)
-    return
+def _(add_analysis_columns, clean, runners_raw):
+    runners, cleaning_report = clean(runners_raw)
+    runners = add_analysis_columns(runners)
+    cleaning_report
+    return (runners,)
 
 
 @app.cell
-def _(clean, runners_raw):
-    runners, cleaning_report = clean(runners_raw)
-    cleaning_report
-    return
+def _(pl, runners):
+    finishers = runners.filter(pl.col("result") == "finished")
+    return (finishers,)
 
 
 if __name__ == "__main__":

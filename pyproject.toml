@@ -5,6 +5,7 @@ requires-python = ">=3.14"
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
+    "folium>=1.0.0",
     "marimo>=0.25.1",
     "polars>=2.0.0",
     "pyarrow>=26.0.0",
